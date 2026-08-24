@@ -45,7 +45,7 @@ alg.delta      = 1e-8;
 
 rng(cfg.seed);
 
-d = generateInputSignal(cfg.N, cfg);
+d = cfg.signal.generator(cfg.N, cfg.signal);
 data = generateReceivedData(d, cfg);
 
 %% Run adaptive equalizer

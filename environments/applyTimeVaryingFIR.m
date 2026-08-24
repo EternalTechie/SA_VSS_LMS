@@ -3,7 +3,7 @@ function x = applyTimeVaryingFIR(d, h)
 
 N = numel(d);
 M = size(h, 1);
-x = zeros(N, 1);
+% x = zeros(N, 1);
 
 for n = 1:N
     tapCount = min(M, n);

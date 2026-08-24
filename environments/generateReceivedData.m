@@ -4,16 +4,23 @@ function data = generateReceivedData(d, cfg)
 % The input sequence d is supplied by the caller. This function owns only the
 % channel trajectory, receiver noise, and received signal x.
 
-h = generateChannelTrajectory(cfg);
+[h, channelInfo] = generateChannelTrajectory(cfg);
 
-xClean = applyTimeVaryingFIR(d, h);
+if isfield(cfg.channel, "renderer")
+    renderer = cfg.channel.renderer;
+else
+    renderer = @applyTimeVaryingFIR;
+end
+
+xClean = renderer(d, h);
 x = addNoise(xClean, cfg.noise);
 
 data.d = d;
 data.x = x;
 data.h = h;
-data.changeIdx = [];
+data.changeIdx = channelInfo.changeIdx;
 data.name = describeScenario(cfg);
+data.channelInfo = channelInfo;
 data.cfg = cfg;
 end
 
