@@ -9,7 +9,7 @@ addpath(genpath(pwd));
 
 %% Select adaptive filter
 
-equalizerNames = ["nlms", "vss_lms"];
+equalizerNames = ["lms_c", "nlms", "vss_lms", "za_lms", "rza_lms"];
 
 %% Global simulation parameters
 
@@ -38,8 +38,28 @@ cfg.seed        = 1;
 
 %% Algorithm parameters
 
-alg.nlms.mu         = 0.5;
-alg.nlms.delta      = 1e-8;
+% LMS
+alg.lms_c.mu    = 0.05;
+
+% NLMS
+alg.nlms.mu    = 0.5;
+alg.nlms.delta = 1e-8;
+
+% VSS-LMS
+alg.vss_lms.mu0   = 0.01;
+alg.vss_lms.alpha = 0.97;
+alg.vss_lms.gamma = 1e-3;
+alg.vss_lms.muMin = 1e-5;
+alg.vss_lms.muMax = 0.1;
+
+% ZA-LMS
+alg.za_lms.mu  = 0.009;
+alg.za_lms.rho = 4e-5;
+
+% RZA-LMS
+alg.rza_lms.mu    = 0.009;
+alg.rza_lms.rho   = 4e-5;
+alg.rza_lms.alpha = 10;
 
 %% Generate input signal and received data
 
