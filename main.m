@@ -9,11 +9,11 @@ addpath(genpath(pwd));
 
 %% Select adaptive filter
 
-equalizerName = "nlms";
+equalizerNames = ["nlms", "vss_lms"];
 
 %% Global simulation parameters
 
-cfg.N          = 20000;     % number of samples
+cfg.N          = 60000;     % number of samples
 cfg.M          = 32;        % adaptive filter length
 cfg.SNR_dB     = 30;        % received-signal SNR
 cfg.delay      = 0;         % desired-signal alignment
@@ -38,8 +38,8 @@ cfg.seed        = 1;
 
 %% Algorithm parameters
 
-alg.mu         = 0.5;
-alg.delta      = 1e-8;
+alg.nlms.mu         = 0.5;
+alg.nlms.delta      = 1e-8;
 
 %% Generate input signal and received data
 
@@ -50,38 +50,93 @@ data = generateReceivedData(d, cfg);
 
 %% Run adaptive equalizer
 
-result = runEqualizer(equalizerName, data, cfg, alg);
+results = struct();
+
+for k = 1:numel(equalizerNames)
+
+    name = equalizerNames(k);
+
+    fprintf("\nRunning %s...\n", name);
+
+    results.(name) = runEqualizer(name, data, cfg, alg);
+
+end
 
 %% Evaluate
 
-metrics = evaluateResult(data, result, cfg);
+metrics = struct();
+
+for k = 1:numel(equalizerNames)
+
+    name = equalizerNames(k);
+
+    metrics.(name) = evaluateResult(data, results.(name), cfg);
+
+end
 
 %% Display basic results
 
-fprintf("\nScenario    : %s\n", data.name);
-fprintf("Equalizer   : %s\n", equalizerName);
-fprintf("Final NMSD  : %.3f dB\n", metrics.finalNMSD_dB);
-fprintf("Final error : %.3e\n", metrics.finalErrorPower);
+fprintf("\nScenario: %s\n\n", data.name);
 
-%% Basic plots
+for k = 1:numel(equalizerNames)
+
+    name = equalizerNames(k);
+    metrics = evaluateResult(data, results.(name), cfg);
+
+    fprintf("%-10s | Final NMSD: %8.3f dB | Final error: %.3e\n", ...
+        name, ...
+        metrics.finalNMSD_dB, ...
+        metrics.finalErrorPower);
+
+end
+
+%% NMSD comparison
 
 figure;
-plot(metrics.nmsd_dB, 'LineWidth', 1.2);
+hold on;
+
+for k = 1:numel(equalizerNames)
+
+    name = equalizerNames(k);
+
+    metrics = evaluateResult(data, results.(name), cfg);
+
+    plot(metrics.nmsd_dB, 'LineWidth', 1.2);
+
+end
+
 grid on;
 xlabel('Iteration');
 ylabel('NMSD (dB)');
-title(sprintf('%s - %s', data.name, equalizerName));
+title(sprintf('%s - NMSD Comparison', data.name));
+
+legend(equalizerNames, 'Interpreter', 'none', 'Location', 'best');
+
+hold off;
+
+%% True channel evolution
 
 figure;
 plot(data.h.');
+
 grid on;
 xlabel('Iteration');
 ylabel('True channel coefficients');
-title('True channel evolution');
+title('True Channel Evolution');
 
-figure;
-plot(result.w.');
-grid on;
-xlabel('Iteration');
-ylabel('Estimated filter coefficients');
-title('Estimated coefficients');
+%% Equalizer coefficient evolution
+
+for k = 1:numel(equalizerNames)
+
+    name = equalizerNames(k);
+    result = results.(name);
+
+    figure;
+    plot(result.w.');
+
+    grid on;
+    xlabel('Iteration');
+    ylabel('Equalizer coefficients');
+    title(sprintf('%s - Coefficient Evolution', name));
+
+end
