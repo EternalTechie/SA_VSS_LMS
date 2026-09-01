@@ -9,7 +9,7 @@ addpath(genpath(pwd));
 
 %% Select adaptive filter
 
-equalizerNames = ["lms_c", "nlms", "vss_lms", "za_lms", "rza_lms"];
+equalizerNames = ["nlms", "vss_lms", "za_lms", "rza_lms"];
 
 %% Global simulation parameters
 
@@ -27,7 +27,8 @@ cfg.channel.M           = cfg.M;
 cfg.channel.activeTaps  = [3 9 17];
 cfg.channel.gains       = [0.8 -0.5 0.3];
 cfg.channel.normalize   = true;
-cfg.channel.factors     = {};        % Example: {@slowDriftChannel}
+cfg.channel.slowDrift.stdPerSample = 1e-4;
+cfg.channel.factors     = {@slowDriftChannel};        % Example: {@slowDriftChannel}
 
 % Receiver noise model
 cfg.noise.apply  = @awgnNoise;
@@ -82,7 +83,7 @@ for k = 1:numel(equalizerNames)
 
 end
 
-%% Evaluate
+%% Evaluate all equalizers
 
 metrics = struct();
 
@@ -90,7 +91,8 @@ for k = 1:numel(equalizerNames)
 
     name = equalizerNames(k);
 
-    metrics.(name) = evaluateResult(data, results.(name), cfg);
+    metrics.(name) = evaluateResult( ...
+        data, results.(name), cfg);
 
 end
 
@@ -101,12 +103,12 @@ fprintf("\nScenario: %s\n\n", data.name);
 for k = 1:numel(equalizerNames)
 
     name = equalizerNames(k);
-    metrics = evaluateResult(data, results.(name), cfg);
 
-    fprintf("%-10s | Final NMSD: %8.3f dB | Final error: %.3e\n", ...
-        name, ...
-        metrics.finalNMSD_dB, ...
-        metrics.finalErrorPower);
+    fprintf("%-10s | NMSD: %8.3f dB | MSD: %8.3f dB | MSE: %8.3f dB\n", ...
+    name, ...
+    metrics.(name).finalNMSD_dB, ...
+    metrics.(name).finalMSD_dB, ...
+    metrics.(name).finalMSE_dB);
 
 end
 
@@ -119,9 +121,7 @@ for k = 1:numel(equalizerNames)
 
     name = equalizerNames(k);
 
-    metrics = evaluateResult(data, results.(name), cfg);
-
-    plot(metrics.nmsd_dB, 'LineWidth', 1.2);
+    plot(metrics.(name).nmsd_dB, 'LineWidth', 1.2);
 
 end
 
@@ -130,13 +130,64 @@ xlabel('Iteration');
 ylabel('NMSD (dB)');
 title(sprintf('%s - NMSD Comparison', data.name));
 
-legend(equalizerNames, 'Interpreter', 'none', 'Location', 'best');
+legend(equalizerNames, ...
+    'Interpreter', 'none', ...
+    'Location', 'best');
+
+hold off;
+
+%% MSD comparison
+
+figure;
+hold on;
+
+for k = 1:numel(equalizerNames)
+
+    name = equalizerNames(k);
+
+    plot(metrics.(name).msd_dB, 'LineWidth', 1.2);
+
+end
+
+grid on;
+xlabel('Iteration');
+ylabel('MSD (dB)');
+title(sprintf('%s - MSD Comparison', data.name));
+
+legend(equalizerNames, ...
+    'Interpreter', 'none', ...
+    'Location', 'best');
+
+hold off;
+
+%% MSE comparison
+
+figure;
+hold on;
+
+for k = 1:numel(equalizerNames)
+
+    name = equalizerNames(k);
+
+    plot(metrics.(name).mse_dB, 'LineWidth', 1.2);
+
+end
+
+grid on;
+xlabel('Iteration');
+ylabel('MSE (dB)');
+title(sprintf('%s - MSE Comparison', data.name));
+
+legend(equalizerNames, ...
+    'Interpreter', 'none', ...
+    'Location', 'best');
 
 hold off;
 
 %% True channel evolution
 
 figure;
+
 plot(data.h.');
 
 grid on;
@@ -149,14 +200,14 @@ title('True Channel Evolution');
 for k = 1:numel(equalizerNames)
 
     name = equalizerNames(k);
-    result = results.(name);
 
     figure;
-    plot(result.w.');
+
+    plot(results.(name).w.');
 
     grid on;
     xlabel('Iteration');
-    ylabel('Equalizer coefficients');
+    ylabel('Estimated channel coefficients');
     title(sprintf('%s - Coefficient Evolution', name));
 
 end
