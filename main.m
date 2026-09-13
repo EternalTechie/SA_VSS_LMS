@@ -9,7 +9,7 @@ addpath(genpath(pwd));
 
 %% Select adaptive filter
 
-equalizerNames = ["nlms", "vss_lms", "za_lms", "rza_lms"];
+equalizerNames = ["nlms", "vss_lms", "za_lms", "rza_lms", "pza_lms", "cza_lms"];
 
 %% Global simulation parameters
 
@@ -24,11 +24,11 @@ cfg.signal.generator = @whiteGaussianSignal;
 % Channel model
 cfg.channel.initializer = @sparseChannel;
 cfg.channel.M           = cfg.M;
-cfg.channel.activeTaps  = [3 9 17];
-cfg.channel.gains       = [0.8 -0.5 0.3];
+cfg.channel.activeTaps  = [2 4 9];
+cfg.channel.gains       = [0.2 0.8 0.7];
 cfg.channel.normalize   = true;
 cfg.channel.slowDrift.stdPerSample = 1e-4;
-cfg.channel.factors     = {@slowDriftChannel};        % Example: {@slowDriftChannel}
+cfg.channel.factors     = {};        % Example: {@slowDriftChannel}
 
 % Receiver noise model
 cfg.noise.apply  = @awgnNoise;
@@ -61,6 +61,21 @@ alg.za_lms.rho = 4e-5;
 alg.rza_lms.mu    = 0.009;
 alg.rza_lms.rho   = 4e-5;
 alg.rza_lms.alpha = 10;
+
+% PZA-LMS
+alg.pza_lms.mu    = 0.01;
+alg.pza_lms.rho   = 1e-4;
+alg.pza_lms.alpha = 5;
+
+% CZA-LMS
+alg.cza_lms.mu  = 0.01;
+alg.cza_lms.rho = 1e-4;
+alg.cza_lms.a   = 0.1;
+
+% SCZA-LMS
+%alg.scza_lms.mu = 0.01;
+%alg.scza_lms.rho = 1e-4;
+%alg.scza_lms.a = 0.5;
 
 %% Generate input signal and received data
 

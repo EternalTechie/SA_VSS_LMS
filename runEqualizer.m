@@ -12,6 +12,12 @@ switch lower(string(name))
         result = za_lms(data, cfg, alg.za_lms);
     case "rza_lms"
         result = rza_lms(data, cfg, alg.rza_lms);
+    case "pza_lms"
+        result = pza_lms(data, cfg, alg.pza_lms);
+    case "cza_lms"
+        result = cza_lms(data, cfg, alg.cza_lms);
+    case "scza_lms"
+        result = scza_lms(data, cfg, alg.scza_lms);
     otherwise
         error("Unknown equalizer: %s", name);
 end
