@@ -1,3 +1,4 @@
+
 function result = runEqualizer(name, data, cfg, alg)
 %RUNEQUALIZER Dispatch to the selected adaptive equalizer.
 
@@ -18,6 +19,17 @@ switch lower(string(name))
         result = cza_lms(data, cfg, alg.cza_lms);
     case "scza_lms"
         result = scza_lms(data, cfg, alg.scza_lms);
+
+    % Robust adaptive filtering algorithms
+    case "mvc"
+        result = mvc(data, cfg, alg.mvc);
+    case "andrew_sine"
+        result = andrew_sine(data, cfg, alg.andrew_sine);
+    case "hcaf"
+        result = hcaf(data, cfg, alg.hcaf);
+    case "lhcaf"
+        result = lhcaf(data, cfg, alg.lhcaf);
+
     otherwise
         error("Unknown equalizer: %s", name);
 end

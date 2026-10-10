@@ -9,11 +9,13 @@ addpath(genpath(pwd));
 
 %% Select adaptive filter
 
-equalizerNames = ["nlms", "vss_lms", "za_lms", "rza_lms", "pza_lms", "cza_lms"];
+equalizerNames = ["nlms", "vss_lms", "za_lms", "rza_lms", ...
+                  "pza_lms", "cza_lms", ...
+                  "mvc", "andrew_sine", "hcaf", "lhcaf"];
 
 %% Global simulation parameters
 
-cfg.N          = 60000;     % number of samples
+cfg.N          = 100000;     % number of samples
 cfg.M          = 32;        % adaptive filter length
 cfg.SNR_dB     = 30;        % received-signal SNR
 cfg.delay      = 0;         % desired-signal alignment
@@ -23,10 +25,16 @@ cfg.signal.generator = @whiteGaussianSignal;
 
 % Channel model
 cfg.channel.initializer = @sparseChannel;
-cfg.channel.M           = cfg.M;
-cfg.channel.activeTaps  = [2 4 9];
-cfg.channel.gains       = [0.2 0.8 0.7];
-cfg.channel.normalize   = true;
+% Channel configuration
+cfg.channel.M = cfg.M;
+cfg.channel.K = 3;             % Number of active taps
+cfg.channel.minAbs = 0.1;      % Minimum coefficient magnitude
+cfg.channel.maxAbs = 1.0;      % Maximum coefficient magnitude
+cfg.channel.normalize = false;
+
+[cfg.channel.activeTaps, cfg.channel.gains, h] = ...
+    generateSparseChannel(cfg.channel.M, cfg.channel.K, ...
+                          cfg.channel.minAbs, cfg.channel.maxAbs);
 cfg.channel.slowDrift.stdPerSample = 1e-4;
 cfg.channel.factors     = {};        % Example: {@slowDriftChannel}
 
@@ -38,44 +46,55 @@ cfg.noise.SNR_dB = cfg.SNR_dB;
 cfg.seed        = 1;
 
 %% Algorithm parameters
-
+% Common effective step size for fixed-step algorithms
+mu_common = 0.01;
+M   = 32;      % filter length
+sx2 = 1;       % input variance
+% Common attraction strength for zero-attracting algorithms
+rho_common = 1e-4;
 % LMS
-alg.lms_c.mu    = 0.05;
-
+alg.lms_c.mu = mu_common;
 % NLMS
-alg.nlms.mu    = 0.5;
+alg.nlms.mu    = mu_common * M * sx2;   % 0.32, NLMS has input-energy normalization
 alg.nlms.delta = 1e-8;
-
 % VSS-LMS
-alg.vss_lms.mu0   = 0.01;
+alg.vss_lms.mu0   = mu_common;
 alg.vss_lms.alpha = 0.97;
 alg.vss_lms.gamma = 1e-3;
 alg.vss_lms.muMin = 1e-5;
-alg.vss_lms.muMax = 0.1;
-
+alg.vss_lms.muMax = mu_common;          % can only adapt down from the common step
 % ZA-LMS
-alg.za_lms.mu  = 0.009;
-alg.za_lms.rho = 4e-5;
-
+alg.za_lms.mu  = mu_common;
+alg.za_lms.rho = rho_common;
 % RZA-LMS
-alg.rza_lms.mu    = 0.009;
-alg.rza_lms.rho   = 4e-5;
-alg.rza_lms.alpha = 10;
-
+alg.rza_lms.mu    = mu_common;
+alg.rza_lms.rho   = rho_common;
+alg.rza_lms.alpha = 10;                 % pull halves at |w| = 0.1
 % PZA-LMS
-alg.pza_lms.mu    = 0.01;
-alg.pza_lms.rho   = 1e-4;
-alg.pza_lms.alpha = 5;
-
+alg.pza_lms.mu    = mu_common;
+alg.pza_lms.rho   = rho_common;
+alg.pza_lms.alpha = 11;                 % cutoff 1/(alpha-1) = 0.1
 % CZA-LMS
-alg.cza_lms.mu  = 0.01;
-alg.cza_lms.rho = 1e-4;
-alg.cza_lms.a   = 0.1;
-
+alg.cza_lms.mu  = mu_common;
+alg.cza_lms.rho = rho_common;
+alg.cza_lms.a   = 0.1;                  % cutoff 0.1
 % SCZA-LMS
-%alg.scza_lms.mu = 0.01;
-%alg.scza_lms.rho = 1e-4;
-%alg.scza_lms.a = 0.5;
+alg.scza_lms.mu  = mu_common;
+alg.scza_lms.rho = rho_common;
+alg.scza_lms.a   = 0.1;                 % cutoff 0.1
+% Maximum Versoria Criterion
+alg.mvc.tau = 1;
+alg.mvc.p   = 2;
+alg.mvc.mu  = mu_common / (2 * alg.mvc.tau);         % 0.005, effective step 2*mu*tau
+% Andrew's Sine Estimator
+alg.andrew_sine.c  = 0.5;
+alg.andrew_sine.mu = mu_common * alg.andrew_sine.c;  % 0.005, effective step mu/c
+% Hyperbolic Cosine Adaptive Filter
+alg.hcaf.lambda = 1;
+alg.hcaf.mu     = mu_common / alg.hcaf.lambda;       % 0.01, effective step mu*lambda
+% Log-Hyperbolic Cosine Adaptive Filter
+alg.lhcaf.lambda = 2;
+alg.lhcaf.mu     = mu_common / alg.lhcaf.lambda;     % 0.005, effective step mu*lambda
 
 %% Generate input signal and received data
 
