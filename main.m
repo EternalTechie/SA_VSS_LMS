@@ -25,16 +25,10 @@ cfg.signal.generator = @whiteGaussianSignal;
 
 % Channel model
 cfg.channel.initializer = @sparseChannel;
-% Channel configuration
-cfg.channel.M = cfg.M;
-cfg.channel.K = 3;             % Number of active taps
-cfg.channel.minAbs = 0.1;      % Minimum coefficient magnitude
-cfg.channel.maxAbs = 1.0;      % Maximum coefficient magnitude
-cfg.channel.normalize = false;
-
-[cfg.channel.activeTaps, cfg.channel.gains, h] = ...
-    generateSparseChannel(cfg.channel.M, cfg.channel.K, ...
-                          cfg.channel.minAbs, cfg.channel.maxAbs);
+cfg.channel.M           = cfg.M;
+cfg.channel.activeTaps  = [2 4 9];
+cfg.channel.gains       = [0.2 0.8 0.7];
+cfg.channel.normalize   = true;
 cfg.channel.slowDrift.stdPerSample = 1e-4;
 cfg.channel.factors     = {};        % Example: {@slowDriftChannel}
 
@@ -78,10 +72,6 @@ alg.pza_lms.alpha = 11;                 % cutoff 1/(alpha-1) = 0.1
 alg.cza_lms.mu  = mu_common;
 alg.cza_lms.rho = rho_common;
 alg.cza_lms.a   = 0.1;                  % cutoff 0.1
-% SCZA-LMS
-alg.scza_lms.mu  = mu_common;
-alg.scza_lms.rho = rho_common;
-alg.scza_lms.a   = 0.1;                 % cutoff 0.1
 % Maximum Versoria Criterion
 alg.mvc.tau = 1;
 alg.mvc.p   = 2;
@@ -95,6 +85,28 @@ alg.hcaf.mu     = mu_common / alg.hcaf.lambda;       % 0.01, effective step mu*l
 % Log-Hyperbolic Cosine Adaptive Filter
 alg.lhcaf.lambda = 2;
 alg.lhcaf.mu     = mu_common / alg.lhcaf.lambda;     % 0.005, effective step mu*lambda
+% Hyperbolic Cosine Adaptive Filter
+alg.hcaf.lambda = 0.1;
+alg.hcaf.mu     = mu_common / alg.hcaf.lambda;       % 0.1, effective step mu*lambda
+% l0-LMS
+alg.l0_lms.mu   = mu_common;
+alg.l0_lms.rho  = rho_common;           % rho = kappa*beta in Gu et al. notation
+alg.l0_lms.beta = 10;                   % cutoff 1/beta = 0.1
+% PNLMS
+alg.pnlms.mu     = alg.nlms.mu;         % same average step as NLMS
+alg.pnlms.delta  = 1e-8;
+alg.pnlms.rhoP   = 0.01;
+alg.pnlms.deltaP = 0.01;
+% IPNLMS
+alg.ipnlms.mu    = alg.nlms.mu;         % same average step as NLMS
+alg.ipnlms.delta = 1e-8;
+alg.ipnlms.alpha = 0;
+alg.ipnlms.epsK  = 1e-6;
+
+%% Support for ablation_study or monteCarlo etc
+if isappdata(0, 'SAVSS_INIT_ONLY') && getappdata(0, 'SAVSS_INIT_ONLY')
+    return;
+end
 
 %% Generate input signal and received data
 
