@@ -9,9 +9,9 @@ addpath(genpath(pwd));
 
 %% Select adaptive filter
 
-equalizerNames = ["nlms", "vss_lms", "za_lms", "rza_lms", ...
+equalizerNames = ["rza_lms", ...
                   "pza_lms", "cza_lms", ...
-                  "mvc", "andrew_sine", "hcaf", "lhcaf"];
+                  "mvc", "andrew_sine", "hcaf", "lhcaf", "sine_cza", "jlhcaf"];
 
 %% Global simulation parameters
 
@@ -33,8 +33,15 @@ cfg.channel.slowDrift.stdPerSample = 1e-4;
 cfg.channel.factors     = {};        % Example: {@slowDriftChannel}
 
 % Receiver noise model
-cfg.noise.apply  = @awgnNoise;
-cfg.noise.SNR_dB = cfg.SNR_dB;
+cfg.noise.apply   = @awgnNoise;
+cfg.noise.SNR_dB  = cfg.SNR_dB;
+cfg.noise.factors = {@impulseNoise};    % Example: {@impulseNoise}
+
+% Impulse settings (used only if @impulseNoise is in cfg.noise.factors)
+cfg.noise.impulse.prob       = 0.01;    % 1% of samples hit by impulses
+cfg.noise.impulse.powerRatio = 1000;    % impulse variance = 1000 x signal power
+cfg.noise.impulse.outlierIdx = [];      % e.g. [20000 40000] for fixed spikes
+cfg.noise.impulse.outlierAmp = 100;
 
 % Reproducibility
 cfg.seed        = 1;
@@ -79,9 +86,6 @@ alg.mvc.mu  = mu_common / (2 * alg.mvc.tau);         % 0.005, effective step 2*m
 % Andrew's Sine Estimator
 alg.andrew_sine.c  = 0.5;
 alg.andrew_sine.mu = mu_common * alg.andrew_sine.c;  % 0.005, effective step mu/c
-% Hyperbolic Cosine Adaptive Filter
-alg.hcaf.lambda = 1;
-alg.hcaf.mu     = mu_common / alg.hcaf.lambda;       % 0.01, effective step mu*lambda
 % Log-Hyperbolic Cosine Adaptive Filter
 alg.lhcaf.lambda = 2;
 alg.lhcaf.mu     = mu_common / alg.lhcaf.lambda;     % 0.005, effective step mu*lambda
@@ -102,6 +106,21 @@ alg.ipnlms.mu    = alg.nlms.mu;         % same average step as NLMS
 alg.ipnlms.delta = 1e-8;
 alg.ipnlms.alpha = 0;
 alg.ipnlms.epsK  = 1e-6;
+% Generalized Soft-Root-Sign (GSRS)
+alg.gsrs.alpha = 3;                              % score peaks near |e| = sqrt(alpha/3) = 1
+alg.gsrs.beta  = 1e-3;                           % slope parameter
+alg.gsrs.gamma = 2;                              % shape; 2 keeps the small-error update linear
+alg.gsrs.mu    = mu_common * alg.gsrs.alpha^2;   % 0.09, effective step mu/alpha^2
+% Sine-error CZA (experimental, no clamp)
+alg.sine_cza.mu  = mu_common;           % slope of f(e) at 0 is 1, so effective step = mu
+alg.sine_cza.T   = 3;                   % f(e) returns to zero at |e| = T
+alg.sine_cza.rho = rho_common;          % set to 0 to test the sine error function alone
+alg.sine_cza.a   = 0.1;                 % same cutoff as CZA-LMS
+% Joint Logarithmic Hyperbolic Cosine Adaptive Filter
+alg.jlhcaf.lambda = 2;                              % same as LHCAF
+alg.jlhcaf.mu     = mu_common / alg.jlhcaf.lambda;  % 0.005, effective step mu*lambda
+alg.jlhcaf.rho    = rho_common;
+alg.jlhcaf.a      = 0.5;                            % weight scaling in tanh(a*w)
 
 %% Support for ablation_study or monteCarlo etc
 if isappdata(0, 'SAVSS_INIT_ONLY') && getappdata(0, 'SAVSS_INIT_ONLY')
@@ -158,75 +177,79 @@ for k = 1:numel(equalizerNames)
 
 end
 
-%% NMSD comparison
+%% Plot styles
+numEq      = numel(equalizerNames);
+colors     = turbo(numEq + 2);
+colors     = colors(2:end-1, :);        % skip near-black and near-white ends
+lineStyles = ["-", "--", "-.", ":"];
+markers    = ["o", "s", "d", "^", "v", "p", "h", ">", "<"];
+smoothWin  = 200;                       % moving average (in linear scale) for curves
+
+%% Learning curves (smoothed)
+curveNames = ["nmsd", "msd", "mse"];
+curveLabel = ["NMSD", "MSD", "MSE"];
+
+for c = 1:numel(curveNames)
+
+    figure;
+    hold on;
+
+    for k = 1:numEq
+
+        name = equalizerNames(k);
+        lin  = 10.^(metrics.(name).(curveNames(c) + "_dB") / 10);
+        lin(~isfinite(lin)) = NaN;
+
+        plot(10 * log10(movmean(lin, smoothWin, 'omitnan')), ...
+            'Color', colors(k, :), ...
+            'LineStyle', lineStyles(mod(k - 1, numel(lineStyles)) + 1), ...
+            'LineWidth', 1.4);
+
+    end
+
+    grid on;
+    xlabel('Iteration');
+    ylabel(curveLabel(c) + " (dB)");
+    title(sprintf('%s - %s (moving average over %d samples)', ...
+          data.name, curveLabel(c), smoothWin));
+
+    legend(equalizerNames, ...
+        'Interpreter', 'none', ...
+        'Location', 'eastoutside');
+
+    hold off;
+
+end
+
+%% Steady-state NMSD (one point per equalizer)
+
+finalNMSD_dB = zeros(numEq, 1);
+for k = 1:numEq
+    finalNMSD_dB(k) = metrics.(equalizerNames(k)).finalNMSD_dB;
+end
 
 figure;
 hold on;
 
-for k = 1:numel(equalizerNames)
-
-    name = equalizerNames(k);
-
-    plot(metrics.(name).nmsd_dB, 'LineWidth', 1.2);
-
+for k = 1:numEq
+    plot(k, finalNMSD_dB(k), ...
+        'Marker', markers(mod(k - 1, numel(markers)) + 1), ...
+        'MarkerSize', 9, ...
+        'MarkerFaceColor', colors(k, :), ...
+        'MarkerEdgeColor', colors(k, :), ...
+        'LineStyle', 'none');
+    text(k, finalNMSD_dB(k), sprintf('  %.1f', finalNMSD_dB(k)), ...
+        'VerticalAlignment', 'middle', 'FontSize', 9);
 end
 
+xlim([0.5, numEq + 0.5]);
+xticks(1:numEq);
+xticklabels(equalizerNames);
+set(gca, 'TickLabelInterpreter', 'none');
+xtickangle(30);
 grid on;
-xlabel('Iteration');
-ylabel('NMSD (dB)');
-title(sprintf('%s - NMSD Comparison', data.name));
-
-legend(equalizerNames, ...
-    'Interpreter', 'none', ...
-    'Location', 'best');
-
-hold off;
-
-%% MSD comparison
-
-figure;
-hold on;
-
-for k = 1:numel(equalizerNames)
-
-    name = equalizerNames(k);
-
-    plot(metrics.(name).msd_dB, 'LineWidth', 1.2);
-
-end
-
-grid on;
-xlabel('Iteration');
-ylabel('MSD (dB)');
-title(sprintf('%s - MSD Comparison', data.name));
-
-legend(equalizerNames, ...
-    'Interpreter', 'none', ...
-    'Location', 'best');
-
-hold off;
-
-%% MSE comparison
-
-figure;
-hold on;
-
-for k = 1:numel(equalizerNames)
-
-    name = equalizerNames(k);
-
-    plot(metrics.(name).mse_dB, 'LineWidth', 1.2);
-
-end
-
-grid on;
-xlabel('Iteration');
-ylabel('MSE (dB)');
-title(sprintf('%s - MSE Comparison', data.name));
-
-legend(equalizerNames, ...
-    'Interpreter', 'none', ...
-    'Location', 'best');
+ylabel('Steady-state NMSD (dB)');
+title(sprintf('%s - steady-state NMSD (last 10%% of iterations)', data.name));
 
 hold off;
 
@@ -240,20 +263,3 @@ grid on;
 xlabel('Iteration');
 ylabel('True channel coefficients');
 title('True Channel Evolution');
-
-%% Equalizer coefficient evolution
-
-for k = 1:numel(equalizerNames)
-
-    name = equalizerNames(k);
-
-    figure;
-
-    plot(results.(name).w.');
-
-    grid on;
-    xlabel('Iteration');
-    ylabel('Estimated channel coefficients');
-    title(sprintf('%s - Coefficient Evolution', name));
-
-end

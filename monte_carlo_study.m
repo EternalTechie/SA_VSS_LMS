@@ -30,7 +30,7 @@ close all;
 %% Algorithms to compare
 mcNames = ["lms_c", "nlms", "pnlms", "ipnlms", ...
            "za_lms", "rza_lms", "l0_lms", "pza_lms", "cza_lms", ...
-           "mvc", "andrew_sine", "hcaf", "lhcaf"];
+           "mvc", "andrew_sine", "hcaf", "lhcaf", "gsrs"];
 
 %% Monte Carlo parameters
 mc.N          = 20000;      % iterations per channel

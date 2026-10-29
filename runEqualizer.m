@@ -1,4 +1,3 @@
-
 function result = runEqualizer(name, data, cfg, alg)
 %RUNEQUALIZER Dispatch to the selected adaptive equalizer.
 
@@ -37,7 +36,13 @@ switch lower(string(name))
         result = hcaf(data, cfg, alg.hcaf);
     case "lhcaf"
         result = lhcaf(data, cfg, alg.lhcaf);
-
+    case "gsrs"
+        result = gsrs(data, cfg, alg.gsrs);
+    case "sine_cza"
+        result = sine_cza(data, cfg, alg.sine_cza);
+    case "jlhcaf"
+        result = jlhcaf(data, cfg, alg.jlhcaf);
+        
     otherwise
         error("Unknown equalizer: %s", name);
 end
